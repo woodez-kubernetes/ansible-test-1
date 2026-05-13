@@ -1,5 +1,5 @@
 ---
 - hosts: localhost
-  gather_facts: no
+  gather_facts no
   tasks:
     - debug: { msg: "Hello from the controller, this is kevin Wood is very cool" 
