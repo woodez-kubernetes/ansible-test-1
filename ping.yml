@@ -1,5 +1,5 @@
 ---
-- hosts localhost
+- hosts: localhost
   gather_facts: no
   tasks:
     - debug: { msg: "Kevin says Hello controller how are you" }
