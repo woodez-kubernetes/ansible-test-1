@@ -1,0 +1,36 @@
+name: stage1-manual-launch
+on:
+  workflow_dispatch:
+    inputs:
+      playbook:
+        description: "Playbook filename"
+        required: true
+        default: "ping.yml"
+
+jobs:
+  launch:
+    runs-on: self-hosted
+    steps:
+      - name: Launch and poll
+        env:
+          T: ${{ secrets.ANSIBLE_CONTROLLER_TOKEN }}
+          BASE: ${{ vars.ANSIBLE_CONTROLLER_URL }}/api/v1
+          PROJECT_ID: ${{ vars.PROJECT_ID_STAGING }}
+          INVENTORY_ID: ${{ vars.INVENTORY_ID_STAGING }}
+          PLAYBOOK: ${{ github.event.inputs.playbook }}
+        run: |
+          set -euo pipefail
+          BODY=$(jq -nc --arg pb "$PLAYBOOK" --argjson inv "$INVENTORY_ID" \
+                       '{playbook:$pb, inventory_id:$inv, credential_ids:[], extra_vars:{}}')
+          RESP=$(curl -fsS -H "Authorization: Token $T" -H "Content-Type: application/json" \
+                       -X POST "$BASE/projects/$PROJECT_ID/launch/" -d "$BODY")
+          JID=$(jq -r .job_id <<<"$RESP")
+          echo "::notice::Launched job $JID"
+          for i in $(seq 1 120); do
+            S=$(curl -fsS -H "Authorization: Token $T" "$BASE/jobs/$JID/" | jq -r .status)
+            echo "tick=$i status=$S"
+            case "$S" in success|failed|canceled) break;; esac
+            sleep 5
+          done
+          curl -fsS -H "Authorization: Token $T" "$BASE/jobs/$JID/log/" | jq -r .stdout
+          [ "$S" = "success" ] || exit 1
