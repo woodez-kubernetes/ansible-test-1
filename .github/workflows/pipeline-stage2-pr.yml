@@ -23,8 +23,32 @@ jobs:
           echo "playbooks=$PB" >> "$GITHUB_OUTPUT"
           echo "Found playbooks: $PB"
 
-  dry-run:
+  syntax-check:
     needs: detect-changes
+    if: needs.detect-changes.outputs.playbooks != '[]'
+    runs-on: self-hosted
+    strategy:
+      fail-fast: false
+      matrix:
+        playbook: ${{ fromJSON(needs.detect-changes.outputs.playbooks) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install ansible-core in venv
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install --upgrade pip
+          pip install ansible-core
+      - name: ansible-playbook --syntax-check
+        run: |
+          source .venv/bin/activate
+          ansible-playbook --syntax-check "${{ matrix.playbook }}"
+
+  dry-run:
+    needs: [detect-changes, syntax-check]
     if: needs.detect-changes.outputs.playbooks != '[]'
     runs-on: self-hosted
     strategy:
