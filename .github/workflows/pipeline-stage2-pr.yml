@@ -1,0 +1,67 @@
+name: stage2-pr-check
+on:
+  pull_request:
+    paths: ['**.yml', '**.yaml']
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  detect-changes:
+    runs-on: self-hosted
+    outputs:
+      playbooks: ${{ steps.detect.outputs.playbooks }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - id: detect
+        run: |
+          PB=$(git diff --name-only origin/${{ github.base_ref }}...HEAD \
+               | grep -E '^[^/]+\.ya?ml$' \
+               | jq -R . | jq -sc .)
+          echo "playbooks=$PB" >> "$GITHUB_OUTPUT"
+          echo "Found playbooks: $PB"
+
+  dry-run:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.playbooks != '[]'
+    runs-on: self-hosted
+    strategy:
+      fail-fast: false
+      matrix:
+        playbook: ${{ fromJSON(needs.detect-changes.outputs.playbooks) }}
+    steps:
+      - name: Launch (check mode)
+        env:
+          T: ${{ secrets.ANSIBLE_CONTROLLER_TOKEN }}
+          BASE: ${{ vars.ANSIBLE_CONTROLLER_URL }}/api/v1
+        run: |
+          set -euo pipefail
+          BODY=$(jq -nc --arg pb "${{ matrix.playbook }}" \
+                        --argjson inv ${{ vars.INVENTORY_ID_STAGING }} \
+                        '{playbook:$pb, inventory_id:$inv,
+                          credential_ids:[],
+                          extra_vars:{ansible_check_mode:true,
+                                      git_sha:"${{ github.event.pull_request.head.sha }}"}}')
+          JID=$(curl -fsS -H "Authorization: Token $T" -H "Content-Type: application/json" \
+                       -X POST "$BASE/projects/${{ vars.PROJECT_ID_STAGING }}/launch/" \
+                       -d "$BODY" | jq -r .job_id)
+          echo "JID=$JID" >> "$GITHUB_ENV"
+          for i in $(seq 1 120); do
+            S=$(curl -fsS -H "Authorization: Token $T" "$BASE/jobs/$JID/" | jq -r .status)
+            case "$S" in success|failed|canceled) break;; esac
+            sleep 5
+          done
+          curl -fsS -H "Authorization: Token $T" "$BASE/jobs/$JID/log/" | jq -r .stdout
+          echo "FINAL_STATUS=$S" >> "$GITHUB_ENV"
+          [ "$S" = "success" ] || exit 1
+
+      - name: Comment on PR
+        if: always()
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            **${{ matrix.playbook }}** dry-run → ${{ env.FINAL_STATUS || 'unknown' }}
+            Job: ${{ vars.ANSIBLE_CONTROLLER_URL }}/jobs/${{ env.JID }}/
