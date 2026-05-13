@@ -26,7 +26,7 @@ jobs:
   dry-run:
     needs: detect-changes
     if: needs.detect-changes.outputs.playbooks != '[]'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     strategy:
       fail-fast: false
       matrix:
