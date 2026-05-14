@@ -3,6 +3,10 @@ on:
   pull_request:
     paths: ['**.yml', '**.yaml']
 
+concurrency:
+  group: ansible-controller-project-${{ vars.PROJECT_ID_STAGING }}
+  cancel-in-progress: false
+
 permissions:
   pull-requests: write
   contents: read
@@ -56,20 +60,15 @@ jobs:
       matrix:
         playbook: ${{ fromJSON(needs.detect-changes.outputs.playbooks) }}
     steps:
-      - name: Sync project to PR SHA
+      - name: Point project at PR branch
         env:
           T: ${{ secrets.ANSIBLE_CONTROLLER_TOKEN }}
           BASE: ${{ vars.ANSIBLE_CONTROLLER_URL }}/api/v1
         run: |
           set -euo pipefail
-          UID=$(curl -fsS -H "Authorization: Token $T" -X POST \
-                  "$BASE/projects/${{ vars.PROJECT_ID_STAGING }}/update/" | jq -r .id)
-          for i in $(seq 1 60); do
-            S=$(curl -fsS -H "Authorization: Token $T" "$BASE/project_updates/$UID/" | jq -r .status)
-            case "$S" in successful|failed|canceled) break;; esac
-            sleep 3
-          done
-          [ "$S" = "successful" ] || { echo "::error::project update $S"; exit 1; }
+          curl -fsS -H "Authorization: Token $T" -H "Content-Type: application/json" \
+               -X PATCH "$BASE/projects/${{ vars.PROJECT_ID_STAGING }}/" \
+               -d "$(jq -nc --arg b "${{ github.head_ref }}" '{git_branch:$b}')"
 
       - name: Launch (check mode)
         env:
@@ -78,12 +77,11 @@ jobs:
         run: |
           set -euo pipefail
           BODY=$(jq -nc --arg pb "${{ matrix.playbook }}" \
-                        --arg ref "${{ github.event.pull_request.head.sha }}" \
+                        --arg sha "${{ github.event.pull_request.head.sha }}" \
                         --argjson inv ${{ vars.INVENTORY_ID_STAGING }} \
                         '{playbook:$pb, inventory_id:$inv,
-                          scm_branch:$ref,
                           credential_ids:[],
-                          extra_vars:{ansible_check_mode:true, git_sha:$ref}}')
+                          extra_vars:{ansible_check_mode:true, git_sha:$sha}}')
           echo "Launch request body: $BODY"
           RESP=$(curl -fsS -H "Authorization: Token $T" -H "Content-Type: application/json" \
                        -X POST "$BASE/projects/${{ vars.PROJECT_ID_STAGING }}/launch/" \
