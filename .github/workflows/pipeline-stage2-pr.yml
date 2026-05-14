@@ -56,6 +56,21 @@ jobs:
       matrix:
         playbook: ${{ fromJSON(needs.detect-changes.outputs.playbooks) }}
     steps:
+      - name: Sync project to PR SHA
+        env:
+          T: ${{ secrets.ANSIBLE_CONTROLLER_TOKEN }}
+          BASE: ${{ vars.ANSIBLE_CONTROLLER_URL }}/api/v1
+        run: |
+          set -euo pipefail
+          UID=$(curl -fsS -H "Authorization: Token $T" -X POST \
+                  "$BASE/projects/${{ vars.PROJECT_ID_STAGING }}/update/" | jq -r .id)
+          for i in $(seq 1 60); do
+            S=$(curl -fsS -H "Authorization: Token $T" "$BASE/project_updates/$UID/" | jq -r .status)
+            case "$S" in successful|failed|canceled) break;; esac
+            sleep 3
+          done
+          [ "$S" = "successful" ] || { echo "::error::project update $S"; exit 1; }
+
       - name: Launch (check mode)
         env:
           T: ${{ secrets.ANSIBLE_CONTROLLER_TOKEN }}
@@ -69,9 +84,12 @@ jobs:
                           scm_branch:$ref,
                           credential_ids:[],
                           extra_vars:{ansible_check_mode:true, git_sha:$ref}}')
-          JID=$(curl -fsS -H "Authorization: Token $T" -H "Content-Type: application/json" \
+          echo "Launch request body: $BODY"
+          RESP=$(curl -fsS -H "Authorization: Token $T" -H "Content-Type: application/json" \
                        -X POST "$BASE/projects/${{ vars.PROJECT_ID_STAGING }}/launch/" \
-                       -d "$BODY" | jq -r .job_id)
+                       -d "$BODY")
+          echo "Launch response: $RESP"
+          JID=$(jq -r .job_id <<<"$RESP")
           echo "JID=$JID" >> "$GITHUB_ENV"
           for i in $(seq 1 120); do
             S=$(curl -fsS -H "Authorization: Token $T" "$BASE/jobs/$JID/" | jq -r .status)
