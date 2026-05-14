@@ -2,4 +2,4 @@
 - hosts: webservers
   gather_facts: no
   tasks:
-    - debug: { msg: "Silverthorn will when the baseball game and take the cup and drink 50 beers" }
+    - debug: { msg: "Silverthorn will when the baseball game and take the cup and drink 50 beers and 50 ladies. oh yeah" }
