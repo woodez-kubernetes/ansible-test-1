@@ -1,5 +1,5 @@
 ---
-- hosts: localhost
+- hosts: webservers
   gather_facts: no
   tasks:
-    - debug: { msg: "Kevin says Hello controller how are you Woody" }
+    - debug: { msg: "Silverthorn will when the baseball game and take the cup" }

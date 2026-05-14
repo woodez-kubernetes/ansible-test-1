@@ -1,0 +1,43 @@
+name: stage3-deploy-staging
+on:
+  push:
+    branches: [release-dev]
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect changed playbooks
+        id: detect
+        run: |
+          PB=$(git diff --name-only HEAD^ HEAD | grep -E '^[^/]+\.ya?ml$' | jq -R . | jq -sc .)
+          [ "$PB" = "[]" ] && PB='["site.yml"]'   # fallback: full site
+          echo "playbooks=$PB" >> "$GITHUB_OUTPUT"
+      - name: Deploy each
+        env:
+          T: ${{ secrets.ANSIBLE_CONTROLLER_TOKEN }}
+          BASE: ${{ vars.ANSIBLE_CONTROLLER_URL }}/api/v1
+        run: |
+          set -euo pipefail
+          for PB in $(jq -r '.[]' <<<'${{ steps.detect.outputs.playbooks }}'); do
+            echo "::group::Deploying $PB"
+            JID=$(curl -fsS -H "Authorization: Token $T" -H "Content-Type: application/json" \
+                         -X POST "$BASE/projects/${{ vars.PROJECT_ID_STAGING }}/launch/" \
+                         -d "$(jq -nc --arg pb "$PB" \
+                                       --argjson inv ${{ vars.INVENTORY_ID_STAGING }} \
+                                       '{playbook:$pb, inventory_id:$inv, credential_ids:[]}')" \
+                  | jq -r .job_id)
+            for i in $(seq 1 360); do
+              S=$(curl -fsS -H "Authorization: Token $T" "$BASE/jobs/$JID/" | jq -r .status)
+              case "$S" in success|failed|canceled) break;; esac; sleep 5
+            done
+            curl -fsS -H "Authorization: Token $T" "$BASE/jobs/$JID/log/" | jq -r .stdout
+            [ "$S" = "success" ] || { echo "::error::$PB → $S (job $JID)"; exit 1; }
+            echo "::endgroup::"
+          done
