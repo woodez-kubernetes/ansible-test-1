@@ -30,8 +30,9 @@ jobs:
             JID=$(curl -fsS -H "Authorization: Token $T" -H "Content-Type: application/json" \
                          -X POST "$BASE/projects/${{ vars.PROJECT_ID_STAGING }}/launch/" \
                          -d "$(jq -nc --arg pb "$PB" \
+                                       --arg ref "${{ github.sha }}" \
                                        --argjson inv ${{ vars.INVENTORY_ID_STAGING }} \
-                                       '{playbook:$pb, inventory_id:$inv, credential_ids:[]}')" \
+                                       '{playbook:$pb, inventory_id:$inv, scm_branch:$ref, credential_ids:[]}')" \
                   | jq -r .job_id)
             for i in $(seq 1 360); do
               S=$(curl -fsS -H "Authorization: Token $T" "$BASE/jobs/$JID/" | jq -r .status)
