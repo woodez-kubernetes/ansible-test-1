@@ -18,10 +18,11 @@ jobs:
           PROJECT_ID: ${{ vars.PROJECT_ID_STAGING }}
           INVENTORY_ID: ${{ vars.INVENTORY_ID_STAGING }}
           PLAYBOOK: ${{ github.event.inputs.playbook }}
+          CRED_ID: ${{ vars.SSH_CREDENTIAL_ID_STAGING }}
         run: |
           set -euo pipefail
-          BODY=$(jq -nc --arg pb "$PLAYBOOK" --argjson inv "$INVENTORY_ID" \
-                       '{playbook:$pb, inventory_id:$inv, credential_ids:[], extra_vars:{}}')
+          BODY=$(jq -nc --arg pb "$PLAYBOOK" --argjson inv "$INVENTORY_ID" --argjson cid "$CRED_ID" \
+                       '{playbook:$pb, inventory_id:$inv, credential_ids:[$cid], extra_vars:{}}')
           RESP=$(curl -fsS -H "Authorization: Token $T" -H "Content-Type: application/json" \
                        -X POST "$BASE/projects/$PROJECT_ID/launch/" -d "$BODY")
           JID=$(jq -r .job_id <<<"$RESP")

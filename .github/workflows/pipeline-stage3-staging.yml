@@ -41,7 +41,8 @@ jobs:
                          -X POST "$BASE/projects/${{ vars.PROJECT_ID_STAGING }}/launch/" \
                          -d "$(jq -nc --arg pb "$PB" \
                                        --argjson inv ${{ vars.INVENTORY_ID_STAGING }} \
-                                       '{playbook:$pb, inventory_id:$inv, credential_ids:[]}')" \
+                                       --argjson cid ${{ vars.SSH_CREDENTIAL_ID_STAGING }} \
+                                       '{playbook:$pb, inventory_id:$inv, credential_ids:[$cid]}')" \
                   | jq -r .job_id)
             for i in $(seq 1 360); do
               S=$(curl -fsS -H "Authorization: Token $T" "$BASE/jobs/$JID/" | jq -r .status)

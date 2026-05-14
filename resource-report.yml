@@ -17,7 +17,7 @@
       ansible.builtin.debug:
         msg:
           - "--- Kevin Rules ---"
-          - "--- Woody Wood  Woodro Rules ---"
+          - "--- Woody Wood  Woodro Woodies Rules ---"
           - "Host: {{ inventory_hostname }}"
           - "CPU cores: {{ ansible_processor_vcpus | default(ansible_processor_count) }}"
           - "Load avg (1/5/15): {{ ansible_loadavg['1m'] }} / {{ ansible_loadavg['5m'] }} / {{ ansible_loadavg['15m'] }}"

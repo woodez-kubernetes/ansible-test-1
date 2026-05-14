@@ -79,8 +79,9 @@ jobs:
           BODY=$(jq -nc --arg pb "${{ matrix.playbook }}" \
                         --arg sha "${{ github.event.pull_request.head.sha }}" \
                         --argjson inv ${{ vars.INVENTORY_ID_STAGING }} \
+                        --argjson cid ${{ vars.SSH_CREDENTIAL_ID_STAGING }} \
                         '{playbook:$pb, inventory_id:$inv,
-                          credential_ids:[],
+                          credential_ids:[$cid],
                           extra_vars:{ansible_check_mode:true, git_sha:$sha}}')
           echo "Launch request body: $BODY"
           RESP=$(curl -fsS -H "Authorization: Token $T" -H "Content-Type: application/json" \
