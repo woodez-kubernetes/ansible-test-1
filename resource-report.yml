@@ -1,0 +1,28 @@
+---
+- name: Report CPU / Memory / Disk usage
+  hosts: webservers
+  gather_facts: yes
+  tasks:
+    - name: Collect disk usage
+      ansible.builtin.shell: df -hPT -x tmpfs -x devtmpfs -x squashfs
+      register: disk_usage
+      changed_when: false
+
+    - name: Collect top CPU consumers
+      ansible.builtin.shell: ps -eo pid,user,pcpu,pmem,comm --sort=-pcpu | head -n 11
+      register: top_cpu
+      changed_when: false
+
+    - name: Report
+      ansible.builtin.debug:
+        msg:
+          - "Host: {{ inventory_hostname }}"
+          - "CPU cores: {{ ansible_processor_vcpus | default(ansible_processor_count) }}"
+          - "Load avg (1/5/15): {{ ansible_loadavg['1m'] }} / {{ ansible_loadavg['5m'] }} / {{ ansible_loadavg['15m'] }}"
+          - "Memory total: {{ (ansible_memtotal_mb / 1024) | round(2) }} GiB"
+          - "Memory free:  {{ (ansible_memfree_mb  / 1024) | round(2) }} GiB"
+          - "Memory used %: {{ ((ansible_memtotal_mb - ansible_memfree_mb) / ansible_memtotal_mb * 100) | round(1) }}"
+          - "--- Disk ---"
+          - "{{ disk_usage.stdout_lines }}"
+          - "--- Top 10 CPU processes ---"
+          - "{{ top_cpu.stdout_lines }}"

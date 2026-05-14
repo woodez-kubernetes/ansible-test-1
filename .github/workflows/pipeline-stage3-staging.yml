@@ -17,7 +17,7 @@ jobs:
         id: detect
         run: |
           PB=$(git diff --name-only HEAD^ HEAD | grep -E '^[^/]+\.ya?ml$' | jq -R . | jq -sc .)
-          [ "$PB" = "[]" ] && PB='["ping.yml"]'   # fallback: full site
+          [ "$PB" = "[]" ] && PB='["resource-report.yml"]'   # fallback: full site
           echo "playbooks=$PB" >> "$GITHUB_OUTPUT"
       - name: Deploy each
         env:
